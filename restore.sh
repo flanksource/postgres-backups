@@ -4,6 +4,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -x
 IFS=$'\n\t'
 
 ALL_DB_SIZE_QUERY="select sum(pg_database_size(datname)::numeric) from pg_database;"
