@@ -60,39 +60,9 @@ function get_current_pod {
         -H "Authorization: Bearer ${TOKEN}"
 }
 
-declare -a search_strategy=(
-    list_all_replica_pods_current_node
-    list_all_replica_pods_any_node
-    get_master_pod
-)
 
-function list_all_replica_pods_current_node {
-    get_pods "labelSelector=${CLUSTER_NAME_LABEL}%3D${SCOPE},spilo-role%3Dreplica&fieldSelector=spec.nodeName%3D${CURRENT_NODENAME}" | head -n 1
-}
+echo Backing up from $PGHOST
 
-function list_all_replica_pods_any_node {
-    get_pods "labelSelector=${CLUSTER_NAME_LABEL}%3D${SCOPE},spilo-role%3Dreplica" | head -n 1
-}
-
-function get_master_pod {
-    get_pods "labelSelector=${CLUSTER_NAME_LABEL}%3D${SCOPE},spilo-role%3Dmaster" | head -n 1
-}
-
-CURRENT_NODENAME=$(get_current_pod | jq .items[].spec.nodeName --raw-output)
-export CURRENT_NODENAME
-
-if [[ "$PGHOST" == "" ]]; then
-    for search in "${search_strategy[@]}"; do
-
-        PGHOST=$(eval "$search")
-        export PGHOST
-
-        if [ -n "$PGHOST" ]; then
-            break
-        fi
-
-    done
-fi
 
 set -x
 dump | compress | aws_upload $(($(estimate_size) / DUMP_SIZE_COEFF))
