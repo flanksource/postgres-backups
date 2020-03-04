@@ -81,16 +81,18 @@ function get_master_pod {
 CURRENT_NODENAME=$(get_current_pod | jq .items[].spec.nodeName --raw-output)
 export CURRENT_NODENAME
 
-for search in "${search_strategy[@]}"; do
+if [[ "$PGHOST" == "" ]]; then
+    for search in "${search_strategy[@]}"; do
 
-    PGHOST=$(eval "$search")
-    export PGHOST
+        PGHOST=$(eval "$search")
+        export PGHOST
 
-    if [ -n "$PGHOST" ]; then
-        break
-    fi
+        if [ -n "$PGHOST" ]; then
+            break
+        fi
 
-done
+    done
+fi
 
 set -x
 dump | compress | aws_upload $(($(estimate_size) / DUMP_SIZE_COEFF))
