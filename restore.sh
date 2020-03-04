@@ -16,7 +16,5 @@ args=()
 [[ ! -z "$LOGICAL_BACKUP_S3_SSE" ]] && args+=("--sse=$LOGICAL_BACKUP_S3_SSE")
 
 aws s3 cp "$PATH_TO_BACKUP" - "${args[@]//\'/}" | gzip -d > db.sql
-eval($PSQL_BEFORE_HOOK)
 args+=($PSQL_OPTS)
 psql -d $PGDATABASE $PSQL_OPTS < db.sql
-eval($PSQL_AFTER_HOOK)
