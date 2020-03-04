@@ -33,8 +33,7 @@ function aws_upload {
 
     # mimic bucket setup from Spilo
     # to keep logical backups at the same path as WAL
-    # NB: $LOGICAL_BACKUP_S3_BUCKET_SCOPE_SUFFIX already contains the leading "/" when set by the Postgres Operator
-    PATH_TO_BACKUP=s3://$LOGICAL_BACKUP_S3_BUCKET/$(date "+%Y-%m-%d.%H%M%S").sql.gz
+    PATH_TO_BACKUP=s3://$LOGICAL_BACKUP_S3_BUCKET/${PGHOST}-$(date "+%Y-%m-%d.%H%M%S").sql.gz
 
     args=()
 
@@ -45,23 +44,6 @@ function aws_upload {
 
     aws s3 cp - "$PATH_TO_BACKUP" "${args[@]//\'/}"
 }
-
-function get_pods {
-    declare -r SELECTOR="$1"
-
-    curl "${K8S_API_URL}/namespaces/${POD_NAMESPACE}/pods?$SELECTOR" \
-        --cacert $CERT \
-        -H "Authorization: Bearer ${TOKEN}" | jq .items[].status.podIP -r
-}
-
-function get_current_pod {
-    curl "${K8S_API_URL}/namespaces/${POD_NAMESPACE}/pods?fieldSelector=metadata.name%3D${HOSTNAME}" \
-        --cacert $CERT \
-        -H "Authorization: Bearer ${TOKEN}"
-}
-
-
-echo Backing up from $PGHOST
 
 
 set -x
