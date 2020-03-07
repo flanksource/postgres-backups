@@ -11,17 +11,12 @@ PG_BIN=$PG_DIR/$PG_VERSION/bin
 DUMP_SIZE_COEFF=5
 ERRORCOUNT=0
 
-TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-K8S_API_URL=https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT/api/v1
-CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-
 function estimate_size {
     "$PG_BIN"/psql -tqAc "${ALL_DB_SIZE_QUERY}"
 }
 
 function dump {
-    # settings are taken from the environment
-    "$PG_BIN"/pg_dumpall -O --verbose
+    "$PG_BIN"/pg_dumpall --verbose --no-owner --no-acl --no-role-passwords --if-exists
 }
 
 function compress {
@@ -30,10 +25,7 @@ function compress {
 
 function aws_upload {
     declare -r EXPECTED_SIZE="$1"
-
-    # mimic bucket setup from Spilo
-    # to keep logical backups at the same path as WAL
-    PATH_TO_BACKUP=s3://$LOGICAL_BACKUP_S3_BUCKET/${PGHOST}-$(date "+%Y-%m-%d.%H%M%S").sql.gz
+    PATH_TO_BACKUP=s3://$LOGICAL_BACKUP_S3_BUCKET/${PGHOST}/$(date "+%Y-%m-%d.%H%M%S").sql.gz
 
     args=()
 
