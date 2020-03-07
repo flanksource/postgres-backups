@@ -16,7 +16,7 @@ function estimate_size {
 }
 
 function dump {
-    "$PG_BIN"/pg_dumpall --verbose --no-owner --no-acl --no-role-passwords --if-exists
+    "$PG_BIN"/pg_dumpall --verbose --no-owner --no-acl --no-role-passwords
 }
 
 function compress {
