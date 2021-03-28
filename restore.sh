@@ -21,9 +21,6 @@ if [[ "$(echo "$snapshot_info_json" | jq -r 'length')" -lt "1" ]]; then
   exit 2
 fi
 
-snapshot_id=$(echo "$snapshot_info_json" | jq -r '.[0].id')
-echo "Found snapshot at path ${BACKUP_PATH} with ID: ${snapshot_id}"
-
 echo "Restoring..."
-restic dump "$snapshot_id" "$BACKUP_PATH" | psql -d "$PGDATABASE" "$PSQL_OPTS"
+restic dump --path "$BACKUP_PATH" latest "$BACKUP_PATH" | psql -d "$PGDATABASE" "$PSQL_OPTS"
 echo "Done."

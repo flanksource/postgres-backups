@@ -34,8 +34,8 @@ function dump {
 }
 
 function restic_backup {
-    BACKUP_FILENAME=${PGHOST}-$(date "+%Y-%m-%d.%H%M%S").sql
-    restic backup --tag "${PGHOST}" --tag "logical-backup" --stdin --stdin-filename "$BACKUP_FILENAME"
+    BACKUP_FILENAME=$(date "+%Y-%m-%d.%H%M%S").sql
+    restic backup --tag "${PGHOST}" --tag "logical-backup" --stdin --stdin-filename "/$PGHOST/$BACKUP_FILENAME"
 }
 
 function delete_old_backups {
