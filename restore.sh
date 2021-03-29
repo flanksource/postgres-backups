@@ -9,12 +9,18 @@ IFS=$'\n\t'
 
 PG_BIN=$PG_DIR/$PG_VERSION/bin
 
-args=()
+if [[ -z "$BACKUP_PATH" ]]; then
+  echo "Missing path to backup file. Please set it via \$BACKUP_PATH"
+  exit 1
+fi
 
-[[ ! -z "$LOGICAL_BACKUP_S3_ENDPOINT" ]] && args+=("--endpoint-url=$LOGICAL_BACKUP_S3_ENDPOINT")
-[[ ! -z "$LOGICAL_BACKUP_S3_REGION" ]] && args+=("--region=$LOGICAL_BACKUP_S3_REGION")
-[[ ! -z "$LOGICAL_BACKUP_S3_SSE" ]] && args+=("--sse=$LOGICAL_BACKUP_S3_SSE")
+snapshot_info_json=$(restic snapshots --path "$BACKUP_PATH" --json)
 
-aws s3 cp "$PATH_TO_BACKUP" - "${args[@]//\'/}" | gzip -d > db.sql
-args+=($PSQL_OPTS)
-psql -d $PGDATABASE $PSQL_OPTS < db.sql
+if [[ "$(echo "$snapshot_info_json" | jq -r 'length')" -lt "1" ]]; then
+  echo "Could not find the backup file at $BACKUP_PATH"
+  exit 2
+fi
+
+echo "Restoring..."
+restic dump --path "$BACKUP_PATH" latest "$BACKUP_PATH" | psql -d "$PGDATABASE" "$PSQL_OPTS"
+echo "Done."

@@ -6,41 +6,61 @@ set -o nounset
 set -o pipefail
 IFS=$'\n\t'
 
-ALL_DB_SIZE_QUERY="select sum(pg_database_size(datname)::numeric) from pg_database;"
 PG_BIN=$PG_DIR/$PG_VERSION/bin
-DUMP_SIZE_COEFF=5
 ERRORCOUNT=0
 
-function estimate_size {
-    "$PG_BIN"/psql -tqAc "${ALL_DB_SIZE_QUERY}"
+function initialize_restic_repo {
+  echo "Checking configured repository '${RESTIC_REPOSITORY}' ..."
+  if restic cat config > /dev/null; then
+    echo "Repository found."
+  else
+    echo "Could not access the configured repository. Trying to initialize (in case it has not been initialized yet) ..."
+    if restic init; then
+      echo "Repository successfully initialized."
+    else
+      if [ "${SKIP_INIT_CHECK:-}" == "true" ]; then
+        echo "Initialization failed. Ignoring errors because SKIP_INIT_CHECK is set in your configuration."
+      else
+        echo "Initialization failed. Please see error messages above and check your configuration. Exiting."
+        exit 1
+      fi
+    fi
+  fi
+  echo -e "\n"
 }
 
 function dump {
     "$PG_BIN"/pg_dumpall --verbose --no-owner --no-acl --no-role-passwords
 }
 
-function compress {
-    pigz
+function restic_backup {
+    BACKUP_FILENAME=$(date "+%Y-%m-%d.%H%M%S").sql
+    restic backup --tag "${PGHOST}" --tag "logical-backup" --stdin --stdin-filename "/$PGHOST/$BACKUP_FILENAME"
 }
 
-function aws_upload {
-    declare -r EXPECTED_SIZE="$1"
-    PATH_TO_BACKUP=s3://$LOGICAL_BACKUP_S3_BUCKET/${PGHOST}/$(date "+%Y-%m-%d.%H%M%S").sql.gz
+function delete_old_backups {
+  args=()
 
-    args=()
+  [[ -n "${BACKUP_RETENTION_KEEP_LAST:-}" ]] && args+=(--keep-last "$BACKUP_RETENTION_KEEP_LAST")
+  [[ -n "${BACKUP_RETENTION_KEEP_HOURLY:-}" ]] && args+=(--keep-hourly "$BACKUP_RETENTION_KEEP_HOURLY")
+  [[ -n "${BACKUP_RETENTION_KEEP_DAILY:-}" ]] && args+=(--keep-daily "$BACKUP_RETENTION_KEEP_DAILY")
+  [[ -n "${BACKUP_RETENTION_KEEP_WEEKLY:-}" ]] && args+=(--keep-weekly "$BACKUP_RETENTION_KEEP_WEEKLY")
+  [[ -n "${BACKUP_RETENTION_KEEP_MONTHLY:-}" ]] && args+=(--keep-monthly "$BACKUP_RETENTION_KEEP_MONTHLY")
+  [[ -n "${BACKUP_RETENTION_KEEP_YEARLY:-}" ]] && args+=(--keep-yearly "$BACKUP_RETENTION_KEEP_YEARLY")
 
-    [[ ! -z "$EXPECTED_SIZE" ]] && args+=("--expected-size=$EXPECTED_SIZE")
-    [[ ! -z "$LOGICAL_BACKUP_S3_ENDPOINT" ]] && args+=("--endpoint-url=$LOGICAL_BACKUP_S3_ENDPOINT")
-    [[ ! -z "$LOGICAL_BACKUP_S3_REGION" ]] && args+=("--region=$LOGICAL_BACKUP_S3_REGION")
-    [[ ! -z "$LOGICAL_BACKUP_S3_SSE" ]] && args+=("--sse=$LOGICAL_BACKUP_S3_SSE")
-
-    aws s3 cp - "$PATH_TO_BACKUP" "${args[@]//\'/}"
+  if [[ "${#args[@]}" -gt "0" ]]; then
+    echo "Deleting old backups based on retention rule:" "${args[@]//\'/}"
+    restic forget --group-by tags --tag "${PGHOST}" "${args[@]//\'/}" --prune
+  else
+    echo "No retention rules detected. Skip deleting old backup"
+  fi
 }
-
 
 set -x
-dump | compress | aws_upload $(($(estimate_size) / DUMP_SIZE_COEFF))
-[[ ${PIPESTATUS[0]} != 0 || ${PIPESTATUS[1]} != 0 || ${PIPESTATUS[2]} != 0 ]] && (( ERRORCOUNT += 1 ))
+initialize_restic_repo
+dump | restic_backup
+[[ ${PIPESTATUS[0]} != 0 || ${PIPESTATUS[1]} != 0 ]] && (( ERRORCOUNT += 1 ))
+delete_old_backups
 set +x
 
-exit $ERRORCOUNT
+exit "$ERRORCOUNT"
